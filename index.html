@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halal Grill Finder</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .search-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: border 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .current-location-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        #map {
+            height: 500px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .results-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .restaurant-card {
+            padding: 20px;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .restaurant-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+            transform: translateX(5px);
+        }
+
+        .restaurant-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .restaurant-address {
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .restaurant-distance {
+            color: #764ba2;
+            font-weight: 600;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .info-text {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🍖 Halal Grill Finder</h1>
+            <p class="subtitle">Discover authentic Halal grills near you</p>
+        </header>
+
+        <div class="search-section">
+            <div class="search-box">
+                <input type="text" id="locationInput" placeholder="Enter city, address, or zip code...">
+                <button onclick="searchLocation()">Search</button>
+                <button class="current-location-btn" onclick="useCurrentLocation()">Use My Location</button>
+            </div>
+            <p class="info-text">This demo uses sample data. In production, this would connect to real restaurant databases.</p>
+        </div>
+
+        <div id="map"></div>
+
+        <div class="results-section">
+            <h2>Nearby Halal Grills</h2>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        let map;
+        let markers = [];
+        
+        // Sample Halal grill data (in production, this would come from a database/API)
+        const sampleRestaurants = [
+            { name: "Al-Zaytoun Grill", lat: 27.7072, lng: -82.4245, address: "123 Main St, Ruskin, FL" },
+            { name: "Mediterranean Halal House", lat: 27.7100, lng: -82.4300, address: "456 Oak Ave, Ruskin, FL" },
+            { name: "The Kabob Station", lat: 27.7050, lng: -82.4200, address: "789 Pine Rd, Ruskin, FL" },
+            { name: "Sahara Grill & Shawarma", lat: 27.7120, lng: -82.4280, address: "321 Elm St, Ruskin, FL" },
+            { name: "Arabian Nights Grill", lat: 27.7080, lng: -82.4260, address: "654 Maple Dr, Ruskin, FL" }
+        ];
+
+        // Initialize map
+        function initMap(lat, lng) {
+            if (map) {
+                map.remove();
+            }
+            
+            map = L.map('map').setView([lat, lng], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Add user location marker
+            L.marker([lat, lng], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(map).bindPopup('Your Location').openPopup();
+        }
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 3959; // Earth's radius in miles
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function displayResults(userLat, userLng) {
+            const resultsDiv = document.getElementById('results');
+            
+            // Calculate distances and sort
+            const restaurantsWithDistance = sampleRestaurants.map(restaurant => ({
+                ...restaurant,
+                distance: calculateDistance(userLat, userLng, restaurant.lat, restaurant.lng)
+            })).sort((a, b) => a.distance - b.distance);
+
+            // Clear existing markers
+            markers.forEach(marker => marker.remove());
+            markers = [];
+
+            // Display results
+            resultsDiv.innerHTML = restaurantsWithDistance.map((restaurant, index) => `
+                <div class="restaurant-card" onclick="focusOnRestaurant(${restaurant.lat}, ${restaurant.lng})">
+                    <div class="restaurant-name">${index + 1}. ${restaurant.name}</div>
+                    <div class="restaurant-address">📍 ${restaurant.address}</div>
+                    <div class="restaurant-distance">📏 ${restaurant.distance.toFixed(2)} miles away</div>
+                </div>
+            `).join('');
+
+            // Add markers to map
+            restaurantsWithDistance.forEach((restaurant, index) => {
+                const marker = L.marker([restaurant.lat, restaurant.lng], {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(map)
+                  .bindPopup(`<b>${restaurant.name}</b><br>${restaurant.address}<br>${restaurant.distance.toFixed(2)} miles away`);
+                
+                markers.push(marker);
+            });
+        }
+
+        function focusOnRestaurant(lat, lng) {
+            map.setView([lat, lng], 15);
+        }
+
+        function useCurrentLocation() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">Getting your location...</div>';
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        initMap(lat, lng);
+                        displayResults(lat, lng);
+                    },
+                    error => {
+                        resultsDiv.innerHTML = '<div class="no-results">Unable to get your location. Using default location (Ruskin, FL).</div>';
+                        initMap(27.7072, -82.4245);
+                        displayResults(27.7072, -82.4245);
+                    }
+                );
+            } else {
+                resultsDiv.innerHTML = '<div class="no-results">Geolocation not supported. Using default location (Ruskin, FL).</div>';
+                initMap(27.7072, -82.4245);
+                displayResults(27.7072, -82.4245);
+            }
+        }
+
+        function searchLocation() {
+            const location = document.getElementById('locationInput').value;
+            const resultsDiv = document.getElementById('results');
+            
+            if (!location) {
+                alert('Please enter a location');
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading">Searching for location...</div>';
+
+            // In production, you would use a geocoding API here
+            // For demo purposes, using default location
+            setTimeout(() => {
+                initMap(27.7072, -82.4245);
+                displayResults(27.7072, -82.4245);
+            }, 500);
+        }
+
+        // Initialize with default location
+        initMap(27.7072, -82.4245);
+        displayResults(27.7072, -82.4245);
+    </script>
+</body>
+</html>
